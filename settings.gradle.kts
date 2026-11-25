@@ -6,4 +6,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = "Dialog_AI_Translator_Android"
-include(":app")
+include(":app", ":core", ":callsim")

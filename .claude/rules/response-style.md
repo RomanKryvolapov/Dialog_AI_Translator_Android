@@ -189,7 +189,7 @@ Three real defects, none of which the reader can picture, weigh, or hand to anyo
 
 > ✓ "**The weekly voice call: one phrase can land in the transcript twice.**
 >
-> How it is meant to work: if the user starts typing while the interviewer is still speaking, it stops
+> How it is meant to work: if the user starts typing while the assistant is still speaking, it stops
 > mid-sentence — before, a message sent then was simply lost.
 >
 > What goes wrong: we save what it had already said, then tell it to stop; the voice service answers

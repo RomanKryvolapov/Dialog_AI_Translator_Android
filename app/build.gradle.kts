@@ -9,22 +9,37 @@ android {
 
     defaultConfig {
         applicationId = "com.romankryvolapov.dialogaitranslator"
-        minSdk = 29 // playback capture starts with Android 10
+        minSdk = 33 // the system recogniser takes our audio from Android 13 on
         targetSdk = 37
         versionCode = 1
         versionName = "0.1"
-        ndk { abiFilters += listOf("arm64-v8a", "x86_64") } // phones and the emulator
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        aidl = true
+        buildConfig = true
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    packaging {
+        resources.excludes += listOf(
+            "META-INF/DEPENDENCIES", "META-INF/INDEX.LIST", "META-INF/LICENSE*", "META-INF/NOTICE*",
+            "META-INF/io.netty.versions.properties", "META-INF/AL2.0", "META-INF/LGPL2.1",
+        )
+    }
 }
 
 dependencies {
-    implementation(files("libs/sherpa-onnx-2.0.3.aar"))
+    implementation(project(":core"))
+    implementation(libs.coroutines.android)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
     implementation(libs.activity.compose)
+    implementation(libs.datastore)
+    implementation(libs.datastore.tink)
+    implementation(libs.tink.android)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 }

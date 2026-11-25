@@ -1,89 +1,71 @@
-# Research for the Android version (2026-11-25)
+# Decisions and research for the Android version (2026-11-25)
 
-Marks: **[checked]** read at the source or inspected; **[inferred]** follows from the documentation, not stated there;
-**[recalled]** general knowledge, not checked. Only the empty skeleton has been built; nothing has run on a device.
+Marks: **[ran]** seen working on the user's phone (Xiaomi 2304FPN6DC, Snapdragon 8 Gen 2, Android 16, HyperOS);
+**[docs]** read at the source; **[inferred]** follows from the above; **[recalled]** not checked.
 
-## What the user wants
+## What the user decided
 
-- The meaning and features of the PC app stay; the stack may change.
-- **Decided by the user (2026-11-25):** calls happen in messengers (WhatsApp, Zoom and the like), not inside our own
-  app (rejected: it needs its own call service); the app is for personal use, installed from a file. Google Play was
-  rejected, so the accessibility-service route is allowed. Start with the probe app.
-- Still unanswered: the phone model, which call apps exactly, and the fate of the PC version (the fork below).
+- The meaning and features of the PC app stay (translate and answer questions); the stack may change.
+- Calls happen in messengers on the same phone; personal use, installed from a file, no Google Play.
+- Remove ONNX; Whisper only if nothing better; AI through a library, so API changes are not followed by hand.
+- Shizuku may be installed on the phone; the PC app's `.env` keys may be put into the app.
 
-## Hearing a call on the same phone — the main risk
-
-- Playback capture takes only media, game and unknown usages; voice communication is excluded **[checked]**.
-- During a call the call always gets the microphone; the listed exceptions are an accessibility service and a
-  privileged pre-installed app **[checked]**. So an ordinary app gets silence **[inferred]**.
-- An overlay window ("display over other apps") can show the translation over a call app, and a foreground service
-  can listen, but neither gives access to the call's audio **[inferred]**.
+## Hearing a call on the same phone
 
 | Option | State |
 |---|---|
-| Accessibility service + loudspeaker | Try first. The user's side should be heard; the other side may be removed by echo cancellation, differently per phone [inferred]. Google Play likely rejects it for call recording [recalled]. |
-| Calls inside our own app (VoIP, meeting bot) | All audio is available; another app's call cannot be intercepted. Cellular needs paid telephony. [recalled] |
-| Root / system app | Full access, not for ordinary phones. |
-| Call on another device over the loudspeaker | Simplest and most reliable. |
-| Call in the phone's browser | Might be played as media and be capturable; unknown, needs a test. |
-| PC app listens, the phone shows the result | Fallback: keeps the PC pipeline, needs the PC on. |
+| **Shizuku: a process of the shell user (chosen)** | The shell holds `CAPTURE_AUDIO_OUTPUT`, `CAPTURE_VOICE_COMMUNICATION_OUTPUT`, `CALL_AUDIO_INTERCEPTION` **[ran: dumpsys]**. An audio-policy tap on voice communication gives the other side's voice digitally, earpiece, loudspeaker or minimum volume alike, while another app holds the call and the microphone **[ran with callsim]**. The shell's microphone is heard at the same time **[ran]**. Cost: Shizuku is started again after a reboot; the policy classes are not public API. |
+| Accessibility service + loudspeaker | Not built: worse audio, depends on echo cancellation. Remains the fallback without Shizuku. |
+| MediaProjection | Media only, never calls **[docs]**; media comes through Shizuku instead. |
+| Calls inside our own app | Rejected by the user. |
 
-Sources that need no tricks: a conversation nearby (microphone), and a video on the phone (playback capture, if its
-player allows it).
+Not checked yet: a real WhatsApp / Telegram / Viber call; a cellular call (`VOICE_DOWNLINK`, opened only while the mode
+is in-call; outside a call it delivers zeros **[ran]**).
 
-## Background listening
+The caller's identity must be cleared before registering the policy, or the audio service sees the app's uid and refuses
+**[ran]**. Media capture stayed silent with the voice-communication flag set on its rule, and worked without it **[ran]**.
 
-A microphone foreground service must start while the app is visible; it needs the runtime RECORD_AUDIO permission,
-FOREGROUND_SERVICE and FOREGROUND_SERVICE_MICROPHONE; no time limit is stated **[checked]**. It keeps recording in
-the background afterwards **[inferred]** from the type's purpose; the screen-off case needs a test. Playback
-capture needs RECORD_AUDIO, the mediaProjection service type and the user's consent **[checked]**.
+## Recognition
 
-## Stack (recommended, not yet confirmed by the user)
+| Option | State |
+|---|---|
+| **Gemini Transcribe Live (default)** | Partials every half second, punctuation, en and ru, free tier (audio may be used by Google), paid about $0.009 a minute **[docs]**; translation shows 1–2 s after a sentence **[ran]**. A session lives 10 minutes. It settles a phrase only at a pause, so `SentenceSplitter` takes sentences earlier **[ran]**. |
+| **Android speech recognition** | On the phone, free, takes our audio as a segmented session **[ran]**; no punctuation, so phrases are cut by length. |
+| **Voice models** (Flash-Lite, GPT-Audio) | As on the PC. Flash-Lite **[ran]**; GPT-Audio not run here. |
+| ML Kit GenAI speech | Advanced mode needs newer chips and a locked bootloader (this phone's is unlocked); the basic mode is the system recogniser, in alpha **[docs]**. Rejected. |
+| Whisper, Sherpa-ONNX | Removed: not streaming / weaker, hundreds of megabytes, no gain over the above. |
+| Moonshine | No Russian recognition **[docs]**. Rejected. |
+| Nemotron 3.5 streaming | Has Russian, but no Android runtime **[docs]**. Rejected. |
+| Speechmatics | Not ported: needs a hand-written protocol; the call's other side is already heard apart. Speaker labels are the loss. |
 
-| Part | PC | Android |
-|---|---|---|
-| UI | JavaFX | Jetpack Compose, Material 3 |
-| Audio | javax.sound | AudioRecord + foreground service; AudioPlaybackCapture |
-| Local speech | Sherpa JNI; Whisper via Python | Sherpa-ONNX AAR 2.0.3 for both |
-| Speechmatics | java.net.http WebSocket | Ktor WebSocket |
-| LLM | LangChain4j | Ktor streaming (SSE) to Google, OpenAI, Anthropic |
-| JSON | Moshi + kotlinx | kotlinx.serialization |
-| Settings | java.util.prefs, .env | DataStore 1.3.0 (datastore-tink 1.3.0 for keys); import/export instead of .env |
-| DI, async | Koin, coroutines | the same |
-| Dialog logs | files | app files + Share |
+## AI library
 
-- Sherpa AAR: downloaded, hash matches the release; it holds OnlineRecognizer, OfflineRecognizer, the Whisper
-  config, Vad and speaker diarization, for four ABIs **[checked]**. Whisper is not streaming: use VAD + re-decoding;
-  the official demo `android/SherpaOnnxSimulateStreamingAsr` exists (not read). Speed not measured; expect small
-  Whisper models.
-- LangChain4j: the pages read do not claim Android support; Android bugs were fixed and some are open; an OkHttp
-  client module exists in beta **[checked]**. Rejected: the PC code uses little of it (a 232-line cloud repository).
-- Koog 1.3.0: rejected. The Google client is 1.3.0-beta, and the OpenAI client appears to request spoken output for
-  audio models **[checked in part of the code]**. Its thinking / reasoning parameters exist.
-- Flutter / React Native: rejected, the Kotlin logic would be rewritten. Gluon (JavaFX on Android): rejected,
-  support for JavaFX 27 not found, complex build.
-- Error classification (per-minute and per-day 429, quota, key, 404, 5xx, network) must be rebuilt on HTTP status
-  and provider bodies instead of LangChain4j exceptions.
+- **LangChain4j 1.24.0 (chosen)**, as on the PC, with `langchain4j-http-client-okhttp` (beta): its default client needs
+  `java.net.http`, absent on Android. Streaming Gemini (text and audio) and OpenAI **[ran]**; Claude not run, no key.
+  The PC code, its tests and the error classification carried over. A stream that breaks off is reported as complete
+  without a finish reason **[ran]**: such an answer is a failure and is asked for again.
+- **google-genai 2.6.0** for Live, which LangChain4j does not cover; OkHttp-based, works on Android **[ran]**. It reports
+  no closed session except in its log (`LiveSessionLog`).
+- Koog 1.3.0: targets Android, but its Google client is beta and nothing would carry over from the PC. Rejected.
+- Firebase AI Logic: needs a Firebase project. Rejected. Vendor SDKs one by one: three APIs to follow. Rejected.
 
-## Order of work (proposal)
+## Structure
 
-1. Probe app: overlay window, accessibility service, microphone; run it during calls in the user's call apps.
-2. Platform-free core: context, prompts, questions, method switching, limits, tokens, with the PC tests.
-   `MessagesTab` in the PC code mixes the translation scheduler with the UI; the scheduler must be separated.
-3. First slice: microphone → Gemini voice method → streamed translation. No recogniser needed.
-4. Sherpa-ONNX, Whisper, Speechmatics; then the settings, prompts and questions screens; playback capture.
+The platform-free core grows here (`core/`); the PC app may move onto it later. Alternative (extract it from the PC app
+first) would have delayed the phone; two copies exist meanwhile. Follows from the user's "start implementing".
 
-Open fork: (a, recommended) the core grows here and the PC app moves onto it later — two copies meanwhile;
-(b) the core is extracted from the PC app first. The developer decides. A core without Android types would also
-keep iOS open.
+Settings: one JSON object in DataStore, encrypted (Tink, key in the Android Keystore), without fields left at their
+defaults. Separate DataStore per area, SharedPreferences: rejected (one object is how the PC app has it).
 
 ## Sources
 
 - https://developer.android.com/media/platform/sharing-audio-input
-- https://developer.android.com/reference/android/media/AudioPlaybackCaptureConfiguration
-- https://developer.android.com/develop/background-work/services/fgs/service-types
-- https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start
-- https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.3
-- https://github.com/langchain4j/langchain4j/issues?q=android
-- https://github.com/JetBrains/koog
-- https://developer.android.com/jetpack/androidx/releases/datastore
+- https://developer.android.com/media/platform/av-capture
+- https://developer.android.com/reference/android/speech/RecognizerIntent
+- https://developers.google.com/ml-kit/genai/speech-recognition/android
+- https://aistudio.google.com/docs/live-api/live-transcribe
+- https://docs.langchain4j.dev/tutorials/customizable-http-client
+- https://docs.koog.ai/prompts/llm-clients/
+- https://github.com/moonshine-ai/moonshine
+- https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+- https://github.com/RikkaApps/Shizuku
