@@ -1,0 +1,422 @@
+/* Общий фон для всего окна */
+.root {
+    -fx-background-color: #323232;
+}
+
+
+
+/* Основной контейнер вкладок */
+.tab-pane {
+    -fx-background-color: #323232;
+}
+
+/* Область заголовков вкладок (вся верхняя панель с названиями вкладок) */
+.tab-pane .tab-header-area {
+    -fx-pref-height: 64px;
+    -fx-min-height: 64px;
+    -fx-max-height: 64px;
+    -fx-padding: 10 0 10 0;
+    -fx-background-insets: 0 0 0 0;
+}
+
+/* Фон под вкладками */
+.tab-pane .tab-header-background {
+    -fx-background-color: #323232;
+    -fx-background-insets: 0 0 0 0;
+}
+
+/* Ширина вкладки: все вкладки одной ширины; кнопки диалога рядом с ними (.header-button) уже */
+.tab-pane {
+    -fx-tab-min-width: 150px;
+    -fx-tab-max-width: 150px;
+}
+
+/* Стиль обычной (неактивной) вкладки. Правый отступ равен правому вырезу фона (10px):
+   текст по центру видимой плашки, а вырез — промежуток между вкладками */
+.tab-pane .tab {
+    -fx-pref-height: 42px;
+    -fx-min-height: 42px;
+    -fx-max-height: 42px;
+    -fx-background-color: #242424;
+    -fx-padding: 10 10 10 0;
+    -fx-background-insets: 0 10 0 0;
+    -fx-border-color: transparent;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+    -fx-background-radius: 24;
+    -fx-border-radius: 24;
+}
+
+/* Стиль активной вкладки */
+.tab-pane .tab:selected {
+    -fx-background-color: #3C71AC;
+}
+
+/* Текст заголовка вкладки (обычной) */
+.tab-pane .tab-label {
+    -fx-pref-height: 42px;
+    -fx-min-height: 42px;
+    -fx-max-height: 42px;
+    -fx-font-size: 18px;
+    -fx-padding: 0 0 0 0;
+    -fx-alignment: center;
+    -fx-text-fill: #AAAAAA;
+}
+
+/* Текст активной вкладки */
+.tab-pane .tab:selected .tab-label {
+    -fx-text-fill: #FFFFFF;
+}
+
+
+
+
+
+
+/* Контейнер прокрутки (ScrollPane) */
+.scroll-pane {
+    -fx-background: #333333;
+    -fx-background-color: #333333;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+/* Внутренняя область просмотра (где отображается содержимое) */
+.scroll-pane .viewport {
+    -fx-background-color: #333333;
+}
+
+/* Фон полос прокрутки (вертикальной и горизонтальной) */
+.scroll-pane .scroll-bar:vertical,
+.scroll-pane .scroll-bar:horizontal {
+    -fx-background-color: #333333;
+}
+
+/* Ползунок в полосах прокрутки */
+.scroll-pane .thumb {
+    -fx-background-color: #444444;
+    -fx-background-insets: 2;
+    -fx-background-radius: 4;
+}
+
+/* Ползунок при наведении */
+.scroll-pane .thumb:hover {
+    -fx-background-color: #666666;
+}
+
+/* Кнопки прокрутки (стрелки) */
+.scroll-pane .increment-button,
+.scroll-pane .decrement-button {
+    -fx-background-color: #111111;
+    -fx-padding: 4;
+    -fx-background-insets: 0;
+}
+
+/* Скрытие стрелок в кнопках прокрутки */
+.scroll-pane .increment-arrow,
+.scroll-pane .decrement-arrow {
+    -fx-shape: " ";
+    -fx-padding: 0;
+}
+
+
+
+
+
+
+/* Чекбоксы */
+.check-box {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 18px;
+}
+
+.check-box .box {
+    -fx-padding: 4px;
+    -fx-background-color: #222222;
+}
+
+/* Settings sidebar category buttons */
+.settings-category-button {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-background-color: #3C3C3C;
+    -fx-background-radius: 6;
+    -fx-alignment: center-left;
+    -fx-padding: 10 14 10 14;
+    -fx-cursor: hand;
+}
+
+.settings-category-button:hover {
+    -fx-background-color: #474747;
+}
+
+.settings-category-button:selected {
+    -fx-background-color: #3C71AC;
+}
+
+
+
+
+/* Фон для всех VBox */
+.vbox {
+    -fx-background-color: #000000;
+}
+
+
+
+
+
+/* Комбобокс — выпадающий список */
+.combo-box {
+    -fx-text-fill: #FFFFFF;
+    -fx-background-color: #222222;
+    -fx-pref-height: 36px;
+    -fx-min-height: 36px;
+    -fx-max-height: 36px;
+    -fx-font-size: 16px;
+    -fx-background-insets: 0;
+}
+
+/* Элементы списка в комбобоксе */
+.combo-box .list-cell {
+    -fx-background-color: #222222;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+}
+
+/* Фон списка в popup */
+.combo-box-popup .list-view {
+    -fx-text-fill: #FFFFFF;
+    -fx-background-color: #222222;
+    -fx-control-inner-background: #222222;
+    -fx-control-inner-background-alt: #222222; /* убираем "через одну" */
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+    -fx-border-color: transparent;
+}
+
+/* Слои контейнеров внутри ListView тоже делаем одинаковыми */
+.combo-box-popup .list-view .virtual-flow,
+.combo-box-popup .list-view .clipped-container,
+.combo-box-popup .list-view .sheet {
+    -fx-background-color: #222222;
+}
+
+/* Ячейки без инкрустаций/границ — пропадают линии */
+.combo-box-popup .list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-padding: 10 16;
+}
+
+/* Чётные/нечётные — одинаковый фон */
+.combo-box-popup .list-view .list-cell:odd {
+    -fx-background-color: transparent;
+}
+
+/* Hover/selected — свои цвета, без линий */
+.combo-box-popup .list-view .list-cell:filled:hover {
+    -fx-background-color: #333333;
+}
+.combo-box-popup .list-view .list-cell:filled:selected {
+    -fx-background-color: #3C71AC;
+    -fx-text-fill: #FFFFFF;
+}
+
+
+
+
+
+
+/* Однострочное текстовое поле */
+.text-field {
+    -fx-background-color: #222222;
+    -fx-pref-height: 36px;
+    -fx-min-height: 36px;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+}
+
+
+
+
+
+/* Многострочное текстовое поле (TextArea): высоту задаёт код (prefRowCount) */
+.text-area {
+    -fx-background-color: #222222;
+    -fx-control-inner-background: #222222;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 16px;
+    -fx-background-insets: 0;
+    -fx-prompt-text-fill: #AAAAAA;
+    -fx-border-color: transparent;
+    -fx-border-insets: 0;
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+
+
+
+/* Обычные Label: высота по тексту (подпись с переносом растёт), текст слева. Кому нужна своя высота, задаёт её сам */
+.label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 18px;
+    -fx-alignment: center-left;
+    -fx-max-width: Infinity;
+}
+
+.original-message-label {
+    -fx-text-fill: #999999;
+    -fx-font-size: 18px;
+    -fx-wrap-text: true;
+    -fx-min-height: 42px;
+    -fx-pref-height: -1;
+    -fx-max-height: Infinity;
+    -fx-alignment: top-left;
+}
+
+
+.answer-message-label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 22px;
+    -fx-wrap-text: true;
+    -fx-min-height: 42px;
+    -fx-pref-height: -1;
+    -fx-max-height: Infinity;
+    -fx-alignment: top-left;
+}
+
+
+/* Settings: the title of a section or a setting */
+.label.title-label {
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-wrap-text: true;
+}
+
+/* Settings: a group of settings under one heading, set off from what is above it by a line */
+.settings-group {
+    -fx-border-color: #4A4A4A transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 24 0 0 0;
+    -fx-max-width: 1000px;
+}
+
+.label.title-label.group-title {
+    -fx-font-size: 28px;
+}
+
+/* Settings: the grey note under a title, and the line of status text beside a row of buttons.
+   One column: notes, wide fields and text areas stop at the same width, so a long line stays readable. */
+.label.note-label {
+    -fx-text-fill: #A0A0A0;
+    -fx-font-size: 16px;
+    -fx-wrap-text: true;
+    -fx-max-width: 1000px;
+}
+
+.label.error-label {
+    -fx-text-fill: #E08080;
+}
+
+
+
+
+
+/* Кнопки */
+.button {
+    -fx-pref-height: 42px;
+    -fx-min-height: 42px;
+    -fx-max-height: 42px;
+    -fx-text-fill: #FFFFFF;
+    -fx-font-size: 20px;
+    -fx-padding: 0 16 0 16;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-border-color: transparent;
+    -fx-cursor: hand;
+}
+
+/* Кнопка при наведении */
+.button:hover {
+    -fx-background-color: #5A5A5A;
+}
+
+/* Кнопка при нажатии */
+.button:pressed {
+    -fx-background-color: #2A2A2A;
+}
+
+/* Отключённая кнопка */
+.button:disabled {
+    -fx-background-color: #222222;
+    -fx-text-fill: #777777;
+    -fx-opacity: 0.6;
+    -fx-cursor: default;
+}
+
+/* Status line under the messages: what the live loop is doing and which translation method answers */
+.label.status-label {
+    -fx-pref-height: 30px;
+    -fx-min-height: 30px;
+    -fx-max-height: 30px;
+    -fx-font-size: 15px;
+    -fx-text-fill: #BBBBBB;
+    -fx-alignment: center-left;
+}
+
+/* Number before each translation method on Settings → General (1 first, then 2 and 3) */
+.label.chain-number {
+    -fx-pref-height: 42px;
+    -fx-min-height: 42px;
+    -fx-max-height: 42px;
+    -fx-font-size: 18px;
+    -fx-text-fill: #AAAAAA;
+    -fx-alignment: center;
+    -fx-min-width: 24px;
+    -fx-max-width: 24px;
+}
+
+/* Кнопки диалога в строке вкладок: той же формы, что и вкладки, но уже — их три, и надписи мельче */
+.button.header-button {
+    -fx-pref-width: 128px;
+    -fx-min-width: 128px;
+    -fx-max-width: 128px;
+    -fx-font-size: 16px;
+    -fx-padding: 0;
+    -fx-background-radius: 24;
+    -fx-border-radius: 24;
+}
+
+/* Settings: every button is this wide, so a row of them lines up under its field. The captions are short,
+   and the note above says the rest. The colour comes from code (Save green, Clear red, everything else blue). */
+.button.settings-button {
+    -fx-pref-width: 200px;
+    -fx-min-width: 200px;
+    -fx-max-width: 200px;
+    -fx-pref-height: 36px;
+    -fx-min-height: 36px;
+    -fx-max-height: 36px;
+    -fx-font-size: 16px;
+}
+
+/* Settings: text fields and combo boxes fill the column, up to the width of the notes; a short one holds a number */
+.settings-field {
+    -fx-max-width: 1000px;
+}
+
+.settings-field-short {
+    -fx-pref-width: 200px;
+    -fx-min-width: 200px;
+    -fx-max-width: 200px;
+}
+
+.text-area.settings-text-area {
+    -fx-max-width: 1000px;
+}

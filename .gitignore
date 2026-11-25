@@ -1,0 +1,24 @@
+.gradle/
+.kotlin/
+build/
+local.properties
+*.iml
+.idea/
+captures/
+.cxx/
+.externalNativeBuild/
+*.jks
+*.keystore
+keystore.properties
+.env
+.env.*
+!.env.example
+.DS_Store
+.claude/settings.local.json
+.claude/CHECKPOINT.md
+.claude/scheduled_tasks.lock
+# Speech models, phrase recordings, voice samples, saved dialogs
+/models/
+/cache/
+/voice/
+/dialogs/
