@@ -109,7 +109,8 @@ Shizuku has to be started again after the phone restarts.
 The thin strip under the tabs shows how loud the sound is while a dialog runs; a flat strip means nothing is heard.
 Below the tabs there are only the two buttons, and a line when something goes wrong; **Settings → General** shows the
 method in use and the tokens spent. **Clear dialog** empties
-both screens and forgets the conversation, the answers included.
+both screens and forgets the conversation, the answers included. While the app is in front, the screen does not turn
+off by itself.
 
 ## Sources of sound
 
