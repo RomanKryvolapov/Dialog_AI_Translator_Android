@@ -1,15 +1,17 @@
 package com.romankryvolapov.dialogaitranslator.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -22,10 +24,14 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedSecureTextField
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SecondaryScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,16 +42,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.romankryvolapov.dialogaitranslator.DialogApp
 import com.romankryvolapov.dialogaitranslator.MainActivity
 import com.romankryvolapov.dialogaitranslator.capture.shizukuProblem
+import com.romankryvolapov.dialogaitranslator.core.AnswerExpansionPrompts
 import com.romankryvolapov.dialogaitranslator.core.ApplicationInfo
+import com.romankryvolapov.dialogaitranslator.core.AudioInput
 import com.romankryvolapov.dialogaitranslator.core.Hearing
 import com.romankryvolapov.dialogaitranslator.core.LastRequests
 import com.romankryvolapov.dialogaitranslator.core.LlmModel
+import com.romankryvolapov.dialogaitranslator.core.MicrophoneSettings
 import com.romankryvolapov.dialogaitranslator.core.ModelParameters
 import com.romankryvolapov.dialogaitranslator.core.PromptPart
 import com.romankryvolapov.dialogaitranslator.core.PromptSettings
@@ -62,19 +72,21 @@ import com.romankryvolapov.dialogaitranslator.core.findLlmModelById
 import com.romankryvolapov.dialogaitranslator.core.hearing
 import com.romankryvolapov.dialogaitranslator.core.promptProblem
 import com.romankryvolapov.dialogaitranslator.core.textModels
+import com.romankryvolapov.dialogaitranslator.capture.MicrophoneEffects
 import com.romankryvolapov.dialogaitranslator.data.AppLog
+import com.romankryvolapov.dialogaitranslator.speech.SpeechPacks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 enum class SettingsPage(val title: String, val note: String) {
-    GENERAL("General", "Translation methods, language, calls"),
+    GENERAL("General", "What to listen to, translation, questions, overlay, microphone, methods, language, calls"),
     PHRASES("Phrases", "Where speech is cut into phrases"),
     MODELS("LLM", "Each model's request parameters"),
     KEYS("API keys", "Google, OpenAI, Claude"),
     MAIN_PROMPT("Main prompt", "Translation of recognised speech, summary"),
     VOICE_PROMPT("Voice prompt", "Models that hear the audio themselves"),
-    QUESTIONS("Questions", "Suggested answers"),
+    QUESTIONS("Questions", "Suggested answers, about me, follow-ups, fuller answers"),
     CONSOLE("Console", "What the app logged"),
 }
 
@@ -82,36 +94,54 @@ private val LANGUAGES = listOf(
     "en-US", "en-GB", "ru-RU", "uk-UA", "de-DE", "fr-FR", "es-ES", "it-IT", "pt-PT", "pl-PL", "bg-BG", "tr-TR", "ja-JP", "ko-KR",
 )
 
+/** From this width the sections stand in a column at the side, as in the PC app; below it, in a row on top. */
+private val SIDE_LIST_FROM = 600.dp
+
+/** The sections are always in view and one of them is open beside them, as in the PC app's settings. */
 @Composable
 fun SettingsScreen(
     app: DialogApp,
     activity: MainActivity,
     info: ApplicationInfo,
-    page: SettingsPage?,
-    open: (SettingsPage?) -> Unit,
+    page: SettingsPage,
+    open: (SettingsPage) -> Unit,
     padding: PaddingValues,
 ) {
-    val update = app.settings::update
-    if (page == null) {
-        Column(Modifier.padding(padding).verticalScroll(rememberScrollState())) {
-            SettingsPage.entries.forEach {
-                Column(Modifier.fillMaxWidth().clickable { open(it) }.padding(20.dp, 14.dp)) {
-                    Text(it.title, style = MaterialTheme.typography.titleMedium)
-                    Note(it.note)
+    BoxWithConstraints(Modifier.padding(padding).fillMaxSize()) {
+        if (maxWidth >= SIDE_LIST_FROM) {
+            Row(Modifier.fillMaxSize()) {
+                Surface(Modifier.width(220.dp).fillMaxHeight(), color = MaterialTheme.colorScheme.surfaceContainer) {
+                    Column(Modifier.verticalScroll(rememberScrollState()).padding(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        SettingsPage.entries.forEach {
+                            NavigationDrawerItem(label = { Text(it.title) }, selected = it == page, onClick = { open(it) })
+                        }
+                    }
                 }
-                HorizontalDivider()
+                Page(app, activity, info, page)
+            }
+        } else {
+            Column(Modifier.fillMaxSize()) {
+                SecondaryScrollableTabRow(selectedTabIndex = page.ordinal, edgePadding = 8.dp, containerColor = Color.Transparent) {
+                    SettingsPage.entries.forEach { Tab(selected = it == page, onClick = { open(it) }, text = { Text(it.title) }) }
+                }
+                Page(app, activity, info, page)
             }
         }
-        return
     }
-    if (page == SettingsPage.CONSOLE) return Console(padding)
+}
+
+@Composable
+private fun Page(app: DialogApp, activity: MainActivity, info: ApplicationInfo, page: SettingsPage) {
+    val update = app.settings::update
+    if (page == SettingsPage.CONSOLE) return Console()
     Column(
-        Modifier.padding(padding).imePadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.imePadding().fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(page.title, style = MaterialTheme.typography.headlineSmall)
+        Note(page.note)
         when (page) {
-            SettingsPage.GENERAL -> General(activity, info, update)
+            SettingsPage.GENERAL -> General(app, activity, info, update)
             SettingsPage.PHRASES -> Phrases(info, update)
             SettingsPage.MODELS -> Models(info, update)
             SettingsPage.KEYS -> Keys(activity, info, update)
@@ -126,7 +156,25 @@ fun SettingsScreen(
 private typealias Update = ((ApplicationInfo) -> ApplicationInfo) -> Unit
 
 @Composable
-private fun General(activity: MainActivity, info: ApplicationInfo, update: Update) {
+private fun General(app: DialogApp, activity: MainActivity, info: ApplicationInfo, update: Update) {
+    val running by app.engine.running.collectAsState()
+    val method by app.engine.methodInUse.collectAsState()
+    val tokens by app.tokenUsage.totals.collectAsState()
+    Text("Dialog", style = MaterialTheme.typography.titleMedium)
+    Note("In use: $method · ${tokensText(tokens)}")
+    Picker("What to listen to", info.audioInput, AudioInput.entries, { it.title }, enabled = !running) { input -> update { it.copy(audioInput = input) } }
+    if (running) Note("Stop the dialog to change it.")
+    Toggle("Translation", info.translationEnabled) { on -> update { it.copy(translationEnabled = on) } }
+    Toggle("Questions: suggest answers to the questions heard", info.questions.enabled) { on ->
+        update { it.copy(questions = it.questions.copy(enabled = on)) }
+    }
+    Toggle("Overlay: the translation over other apps", info.overlayEnabled) { on ->
+        if (on && !activity.canOverlay()) activity.askOverlay()
+        update { it.copy(overlayEnabled = on) }
+    }
+    HorizontalDivider()
+    Microphone(info.microphone) { how -> update { it.copy(microphone = how(it.microphone)) } }
+    HorizontalDivider()
     Text("Translation methods", style = MaterialTheme.typography.titleMedium)
     Note("A dialog starts on method 1; when it fails, the next one takes over until the dialog is started again. First choose how the speech is heard, then, for a recogniser, the model that translates.")
     val chain = info.translationMethods
@@ -162,6 +210,7 @@ private fun General(activity: MainActivity, info: ApplicationInfo, update: Updat
     HorizontalDivider()
     Picker("Language of the conversation", info.speechLanguage, LANGUAGES, { it }) { language -> update { it.copy(speechLanguage = language) } }
     Note("The built-in prompts translate from English into Russian; for another pair edit the prompts too.")
+    SpeechPack(app.speechPacks, info.speechLanguage)
     Toggle("Show the answer as it is written", info.useStreamingResponse) { on -> update { it.copy(useStreamingResponse = on) } }
     HorizontalDivider()
     Text("Calls and sound of this phone", style = MaterialTheme.typography.titleMedium)
@@ -176,6 +225,41 @@ private fun General(activity: MainActivity, info: ApplicationInfo, update: Updat
     Toggle("In a call, hear me as well", info.hearBothSides) { on -> update { it.copy(hearBothSides = on) } }
     Note("Takes effect when a dialog starts.")
     OutlinedButton(onClick = activity::shareDialog) { Text("Share the last dialog") }
+}
+
+/** Whether Android's recogniser has this language on the phone, and a way to get it there. */
+@Composable
+private fun SpeechPack(packs: SpeechPacks, language: String) {
+    var state by remember(language) { mutableStateOf<SpeechPacks.State?>(null) }
+    // Asked again only while it can change by itself: a download under way, or one the user may start.
+    LaunchedEffect(language) {
+        do {
+            val now = packs.state(language)
+            state = now
+            if (!now.settled) delay(3_000)
+        } while (!now.settled)
+    }
+    val now = state ?: return
+    Note("Android speech recognition of $language: ${now.text}.")
+    if (now.canDownload) OutlinedButton({ packs.download(language) }) { Text("Download $language for recognition on the phone") }
+}
+
+/** Only what this phone has; each takes effect when a dialog starts. */
+@Composable
+private fun Microphone(now: MicrophoneSettings, change: ((MicrophoneSettings) -> MicrophoneSettings) -> Unit) {
+    Text("Microphone", style = MaterialTheme.typography.titleMedium)
+    val offered = MicrophoneEffects.available
+    if (MicrophoneEffects.NOISE in offered) Toggle("Noise suppression", now.noiseSuppression) { on -> change { it.copy(noiseSuppression = on) } }
+    if (MicrophoneEffects.GAIN in offered) Toggle("Automatic gain", now.automaticGain) { on -> change { it.copy(automaticGain = on) } }
+    if (MicrophoneEffects.ECHO in offered) {
+        Toggle("Echo cancellation: leave out what this phone itself plays", now.echoCancellation) { on -> change { it.copy(echoCancellation = on) } }
+    }
+    if (offered.isEmpty()) Note("This phone offers no noise suppression, automatic gain or echo cancellation.")
+    val range = MicrophoneSettings.GAIN_PERCENTS
+    NumberField("Gain, %", now.gainPercent.toString(), "${range.first}–${range.last}; 100 leaves the sound as it is") { text ->
+        text.toIntOrNull()?.takeIf { it in range }?.let { v -> change { it.copy(gainPercent = v) } } != null
+    }
+    Note("For the microphone as the source; they take effect when a dialog starts.")
 }
 
 @Composable
@@ -323,7 +407,18 @@ private fun QuestionsPage(app: DialogApp, info: ApplicationInfo, update: Update)
     val now = info.questions
     fun change(how: (QuestionsSettings) -> QuestionsSettings) = update { it.copy(questions = how(it.questions)) }
     Toggle("Suggest answers to the questions heard", now.enabled) { on -> change { it.copy(enabled = on) } }
-    Picker<LlmModel?>("Model", findLlmModelById(now.modelId), textModels(), { it?.title ?: now.modelId }) { m -> m?.let { model -> change { it.copy(modelId = model.id) } } }
+    Picker<LlmModel?>("Model: finds the questions, answers them, suggests follow-ups", findLlmModelById(now.modelId), textModels(), { it?.title ?: now.modelId }) { m ->
+        m?.let { model -> change { it.copy(modelId = model.id) } }
+    }
+    Picker<LlmModel?>("Model: fuller answers", findLlmModelById(now.expansionModelId), textModels(), { it?.title ?: now.expansionModelId }) { m ->
+        m?.let { model -> change { it.copy(expansionModelId = model.id) } }
+    }
+    TextEditor("About me", now.aboutUser, "Background and skills the answers are pitched at. Kept encrypted on this phone and sent with each Questions request to the model's provider.", minLines = 4) { v ->
+        change { it.copy(aboutUser = v) }
+    }
+    TextEditor("Topic of the calls", now.topic, "Such as the main technology or programming language; code is written in it.", minLines = 1) { v ->
+        change { it.copy(topic = v) }
+    }
     Picker("Show the question in", now.questionDisplayLanguage, listOf("") + QuestionPrompts.DISPLAY_LANGUAGES, { it.ifEmpty { "The language of the call" } }) { v ->
         change { it.copy(questionDisplayLanguage = v) }
     }
@@ -336,14 +431,44 @@ private fun QuestionsPage(app: DialogApp, info: ApplicationInfo, update: Update)
     }
     PromptEditor("Instructions", PromptPart.QUESTIONS_INSTRUCTIONS, now.system, QuestionPrompts.INSTRUCTIONS) { v -> change { it.copy(system = v) } }
     PromptEditor("Message", PromptPart.QUESTIONS_MESSAGE, now.user, QuestionPrompts.MESSAGE) { v -> change { it.copy(user = v) } }
+    HorizontalDivider()
+    Text("Follow-up questions and fuller answers", style = MaterialTheme.typography.titleMedium)
+    Note("A tap on an answer offers the follow-up questions the other side may ask next; picking one writes a fuller answer under it.")
+    PromptEditor("Follow-ups: instructions", PromptPart.ANSWER_LANGUAGE_INSTRUCTIONS, now.followUpsSystem, AnswerExpansionPrompts.FOLLOW_UPS_INSTRUCTIONS) { v ->
+        change { it.copy(followUpsSystem = v) }
+    }
+    PromptEditor("Follow-ups: message", PromptPart.FOLLOW_UPS_MESSAGE, now.followUpsUser, AnswerExpansionPrompts.FOLLOW_UPS_MESSAGE) { v ->
+        change { it.copy(followUpsUser = v) }
+    }
+    PromptEditor("Fuller answer: instructions", PromptPart.ANSWER_LANGUAGE_INSTRUCTIONS, now.expansionSystem, AnswerExpansionPrompts.EXPANSION_INSTRUCTIONS) { v ->
+        change { it.copy(expansionSystem = v) }
+    }
+    PromptEditor("Fuller answer: message", PromptPart.EXPANSION_MESSAGE, now.expansionUser, AnswerExpansionPrompts.EXPANSION_MESSAGE) { v ->
+        change { it.copy(expansionUser = v) }
+    }
     val sent by app.lastRequests.questions.collectAsState()
+    val followUps by app.lastRequests.followUps.collectAsState()
+    val expansion by app.lastRequests.expansion.collectAsState()
     Sent("Last request", sent)
+    Sent("Last follow-ups request", followUps)
+    Sent("Last fuller answer request", expansion)
+}
+
+/** Free text saved with its button; blank is allowed. */
+@Composable
+private fun TextEditor(label: String, saved: String, note: String, minLines: Int, save: (String) -> Unit) {
+    var text by remember(saved) { mutableStateOf(saved) }
+    OutlinedTextField(
+        text, { text = it }, Modifier.fillMaxWidth(), minLines = minLines, maxLines = 14,
+        label = { Text(label) }, supportingText = { Text(note) },
+    )
+    if (text != saved) Button({ save(text.trim()) }) { Text("Save") }
 }
 
 @Composable
-private fun Console(padding: PaddingValues) {
+private fun Console() {
     val lines by AppLog.lines.collectAsState()
-    Column(Modifier.padding(padding).fillMaxSize().padding(12.dp)) {
+    Column(Modifier.fillMaxSize().padding(12.dp)) {
         OutlinedButton(onClick = AppLog::clear) { Text("Clear") }
         SelectionContainer {
             LazyColumn(reverseLayout = true, modifier = Modifier.fillMaxSize()) {
@@ -367,12 +492,12 @@ private fun Toggle(label: String, on: Boolean, set: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun <T> Picker(label: String, value: T, options: List<T>, title: (T) -> String, pick: (T) -> Unit) {
+private fun <T> Picker(label: String, value: T, options: List<T>, title: (T) -> String, enabled: Boolean = true, pick: (T) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Column {
         Note(label)
         Box {
-            OutlinedButton({ open = true }, Modifier.fillMaxWidth()) { Text(title(value), Modifier.weight(1f)) }
+            OutlinedButton({ open = true }, Modifier.fillMaxWidth(), enabled = enabled) { Text(title(value), Modifier.weight(1f)) }
             DropdownMenu(open, { open = false }) {
                 options.forEach { option ->
                     DropdownMenuItem({ Text(title(option)) }, {

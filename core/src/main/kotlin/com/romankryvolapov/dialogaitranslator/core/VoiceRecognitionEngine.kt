@@ -11,8 +11,8 @@ enum class VoiceRecognitionEngine(
     /** How it appears in a saved method key: "<slug>:<model id>". */
     val slug: String,
 ) {
-    GEMINI_LIVE("Gemini Transcribe Live (realtime, cloud)", "Gemini Live", "gemini-live"),
-    SYSTEM("Android speech recognition (on the phone)", "Android speech", "system");
+    SYSTEM("Android speech recognition (on the phone)", "Android speech", "system"),
+    GEMINI_LIVE("Gemini Transcribe Live (realtime, cloud)", "Gemini Live", "gemini-live");
 
     companion object {
         fun bySlug(slug: String): VoiceRecognitionEngine? = entries.firstOrNull { it.slug == slug }

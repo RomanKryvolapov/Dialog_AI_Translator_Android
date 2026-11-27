@@ -22,3 +22,5 @@ keystore.properties
 /cache/
 /voice/
 /dialogs/
+# The user's own texts, sent to the phone by installDebug
+/personal/

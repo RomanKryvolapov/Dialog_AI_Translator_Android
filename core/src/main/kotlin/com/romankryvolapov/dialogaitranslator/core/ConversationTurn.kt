@@ -15,4 +15,8 @@ class ConversationTurn(source: String) {
     /** Who said it, when the recogniser tells speakers apart ("S1", "S2"…); no recogniser here does yet. */
     @Volatile
     var speaker: String? = null
+
+    /** The silence before it, where the recogniser can tell: a longer one is where a speaker changes. */
+    @Volatile
+    var pauseBeforeMillis: Long? = null
 }

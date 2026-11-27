@@ -264,7 +264,7 @@ class DialogEngine(
     private inner class RecognizerEvents(private val mine: Wiring) : SpeechRecognizer.Listener {
         override fun onPartial(text: String) = post { if (text.isNotBlank()) show(liveRowId(), text, "") }
 
-        override fun onFinal(text: String) = post {
+        override fun onFinal(text: String, pauseBeforeMillis: Long?) = post {
             if (text.isBlank()) {
                 liveRow?.let(::remove)
                 liveRow = null
@@ -275,6 +275,7 @@ class DialogEngine(
             show(id, text, pending())
             dialogLog("> $text")
             val added = beginTurn(text)
+            added.turn.pauseBeforeMillis = pauseBeforeMillis
             phraseHeard(added.turn)
             enqueue(id, added, null)
         }

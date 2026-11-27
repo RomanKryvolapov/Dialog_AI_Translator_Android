@@ -7,12 +7,14 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import com.romankryvolapov.dialogaitranslator.core.ApplicationInfo
 import com.romankryvolapov.dialogaitranslator.core.SAMPLE_RATE
 import com.romankryvolapov.dialogaitranslator.core.SentenceSplitter
 import com.romankryvolapov.dialogaitranslator.core.SpeechRecognizer
+import com.romankryvolapov.dialogaitranslator.core.textAfter
 import org.slf4j.LoggerFactory
 import java.io.IOException
 import java.io.OutputStream
@@ -23,25 +25,37 @@ import android.speech.SpeechRecognizer as AndroidRecognizer
 /**
  * Android's own speech recognition, on the phone where the language pack is installed. It is given our audio instead
  * of opening the microphone, in one segmented session: each pause settles a phrase and the session goes on.
+ *
+ * Without the pack on the phone, the phone's default recogniser (which may be online) takes over for the rest of the
+ * dialog, and the pack is asked for, so a later dialog can stay on the phone.
  */
-class SystemRecognizer(private val context: Context) : SpeechRecognizer {
+class SystemRecognizer(private val context: Context, private val packs: SpeechPacks) : SpeechRecognizer {
 
     private companion object {
         /** About ten seconds; more means the recogniser no longer reads. */
         const val MAX_QUEUED_FRAMES = 100
         const val MAX_PHRASE_WORDS = 18
+        /**
+         * Heard text that has not changed for this long is taken as a finished phrase. The recogniser itself waits for
+         * silence, and background noise kept a segment open three seconds past the last word.
+         */
+        const val SETTLED_AFTER_MILLIS = 800L
         /** Errors that mean "nothing was said", after which a new session goes on listening. */
         val QUIET_ERRORS = setOf(AndroidRecognizer.ERROR_NO_MATCH, AndroidRecognizer.ERROR_SPEECH_TIMEOUT)
+        val NO_PACK_ERRORS = setOf(AndroidRecognizer.ERROR_LANGUAGE_UNAVAILABLE, AndroidRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED)
     }
 
     private val log = LoggerFactory.getLogger("AndroidSpeech")
     private val main = Handler(Looper.getMainLooper())
     @Volatile private var session: Session? = null
+    /** The language the phone's own recogniser turned down in this dialog; each dialog tries it again. */
+    @Volatile private var noPackFor: String? = null
 
     override val feedsContinuously = true
 
     override fun start(info: ApplicationInfo, listener: SpeechRecognizer.Listener) {
         stop()
+        noPackFor = null
         val next = Session(info.speechLanguage, listener)
         session = next
         main.post(next::open)
@@ -63,8 +77,17 @@ class SystemRecognizer(private val context: Context) : SpeechRecognizer {
     private inner class Session(private val language: String, private val listener: SpeechRecognizer.Listener) : RecognitionListener {
         private val frames = ArrayBlockingQueue<ByteArray>(MAX_QUEUED_FRAMES)
         private var recognizer: AndroidRecognizer? = null
+        private var onDevice = false
         /** The recogniser may write no punctuation, so a phrase without a pause is cut by its length. */
         private var splitter = SentenceSplitter(MAX_PHRASE_WORDS)
+        /** The segment's latest partial text, whole, and its start that was already given as a phrase. */
+        private var heardInSegment = ""
+        private var givenText = ""
+        /** When the previous phrase's last word was heard, the next phrase's first, and the heard text last changed. */
+        private var lastPhraseEndAt: Long? = null
+        private var phraseStartAt: Long? = null
+        private var changedAt = 0L
+        private val settle = Runnable { settleEarly() }
         private var reader: ParcelFileDescriptor? = null
         @Volatile private var output: OutputStream? = null
 
@@ -79,13 +102,16 @@ class SystemRecognizer(private val context: Context) : SpeechRecognizer {
 
         fun open() {
             if (!current) return
+            onDevice = noPackFor != language && AndroidRecognizer.isOnDeviceRecognitionAvailable(context)
             val made = when {
-                AndroidRecognizer.isOnDeviceRecognitionAvailable(context) -> AndroidRecognizer.createOnDeviceSpeechRecognizer(context)
+                onDevice -> AndroidRecognizer.createOnDeviceSpeechRecognizer(context)
                 AndroidRecognizer.isRecognitionAvailable(context) -> AndroidRecognizer.createSpeechRecognizer(context)
                 else -> return listener.onFailure("This phone has no speech recognition")
             }
             recognizer = made
             splitter = SentenceSplitter(MAX_PHRASE_WORDS)
+            heardInSegment = ""
+            givenText = ""
             val pipe = ParcelFileDescriptor.createPipe()
             reader = pipe[0]
             val sink = ParcelFileDescriptor.AutoCloseOutputStream(pipe[1])
@@ -121,6 +147,7 @@ class SystemRecognizer(private val context: Context) : SpeechRecognizer {
         }
 
         fun close() {
+            main.removeCallbacks(settle)
             runCatching { output?.close() }
             output = null
             runCatching { reader?.close() }
@@ -137,21 +164,55 @@ class SystemRecognizer(private val context: Context) : SpeechRecognizer {
         private fun text(bundle: Bundle?): String =
             bundle?.getStringArrayList(AndroidRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty().trim()
 
+        /** [text] without the start of this segment already given as a phrase. */
+        private fun notGiven(text: String): String = textAfter(givenText, text)
+
         override fun onPartialResults(partialResults: Bundle?) {
             val heard = text(partialResults).takeIf { current && it.isNotEmpty() } ?: return
-            val grown = splitter.grow(heard)
-            grown.phrases.forEach(listener::onFinal)
+            val now = SystemClock.elapsedRealtime()
+            if (phraseStartAt == null) phraseStartAt = now
+            if (heard != heardInSegment) changedAt = now
+            heardInSegment = heard
+            val grown = splitter.grow(notGiven(heard))
+            grown.phrases.forEach(::give)
             listener.onPartial(grown.rest)
+            main.removeCallbacks(settle)
+            if (grown.rest.isNotBlank()) main.postDelayed(settle, SETTLED_AFTER_MILLIS)
+        }
+
+        /** Nothing new heard for a while: what is left of the segment goes out as a phrase, without waiting for its end. */
+        private fun settleEarly() {
+            if (!current) return
+            val rest = splitter.finish(notGiven(heardInSegment))
+            givenText = heardInSegment
+            if (rest.isNotBlank()) give(rest)
+        }
+
+        /** A phrase, with the silence before it: from the previous phrase's last word to this one's first. */
+        private fun give(phrase: String) {
+            val pause = lastPhraseEndAt?.let { end -> phraseStartAt?.let { (it - end).coerceAtLeast(0) } }
+            listener.onFinal(phrase, pause)
+            lastPhraseEndAt = changedAt
+            phraseStartAt = null
+        }
+
+        /** The segment's own end: only what was not given early is left. */
+        private fun endSegment(final: String) {
+            main.removeCallbacks(settle)
+            val rest = splitter.finish(notGiven(final))
+            givenText = ""
+            heardInSegment = ""
+            if (rest.isNotBlank()) give(rest) else listener.onFinal("")
         }
 
         override fun onSegmentResults(segmentResults: Bundle) {
-            if (current) listener.onFinal(splitter.finish(text(segmentResults)))
+            if (current) endSegment(text(segmentResults))
         }
 
         /** A recogniser that does not know segmented sessions ends with a plain result instead. */
         override fun onResults(results: Bundle?) {
             if (!current) return
-            listener.onFinal(splitter.finish(text(results)))
+            endSegment(text(results))
             reopen()
         }
 
@@ -164,7 +225,14 @@ class SystemRecognizer(private val context: Context) : SpeechRecognizer {
             if (!current) return
             log.info("Recogniser error {}", error)
             if (error in QUIET_ERRORS) {
-                listener.onFinal("")
+                // What was heard but not settled yet still goes out: the segment ended without a result.
+                endSegment(heardInSegment)
+                return reopen()
+            }
+            if (error in NO_PACK_ERRORS && onDevice && AndroidRecognizer.isRecognitionAvailable(context)) {
+                log.warn("No {} pack for recognition on the phone: the phone's default recogniser, which may be online, takes over for this dialog; the pack is asked for", language)
+                packs.download(language)
+                noPackFor = language
                 return reopen()
             }
             close()

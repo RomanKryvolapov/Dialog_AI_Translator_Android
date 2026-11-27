@@ -70,3 +70,25 @@ class SentenceSplitter(
 
     private fun words(text: String): List<String> = GLUED.replace(text, " ").split(Regex("""\s+""")).filter { it.isNotEmpty() }
 }
+
+/**
+ * What [transcript] holds after [given], an earlier reading of its start that already went out as a phrase. The
+ * recogniser may rewrite that start ("wanna" into "want to"), so it is found by its last words rather than by counting:
+ * a transcript that only rewrote what was given adds nothing.
+ */
+fun textAfter(given: String, transcript: String): String {
+    fun bare(word: String) = word.filter { it.isLetterOrDigit() }.lowercase()
+    val said = transcript.split(Regex("""\s+""")).filter { it.isNotEmpty() }
+    val before = given.split(Regex("""\s+""")).filter { it.isNotEmpty() }.map(::bare)
+    if (before.isEmpty()) return said.joinToString(" ")
+    val words = said.map(::bare)
+    if (words.size >= before.size && words.subList(0, before.size) == before) return said.drop(before.size).joinToString(" ")
+    val tail = before.takeLast(2)
+    val ends = (tail.size..words.size).filter { end -> words.subList(end - tail.size, end) == tail }
+    val end = ends.minByOrNull { kotlin.math.abs(it - before.size) }
+    return when {
+        end != null -> said.drop(end).joinToString(" ")
+        said.size <= before.size -> ""
+        else -> said.drop(before.size).joinToString(" ")
+    }
+}

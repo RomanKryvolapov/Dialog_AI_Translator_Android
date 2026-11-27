@@ -14,6 +14,8 @@ interface QuestionsDisplay {
     /** A new question with its answer so far; the row returned is passed to [update] as the answer grows. */
     fun add(question: String, answer: String): Int
     fun update(row: Int, question: String, answer: String)
+    /** The answer in [row] is complete and kept. */
+    fun settled(row: Int) {}
     fun clear()
 }
 
@@ -37,8 +39,8 @@ class QuestionsAssistant(
         /** Enough for the largest phrase window the settings allow. */
         const val KEPT_PHRASES = 20
         const val MAX_HISTORY = 20
-        /** The tested request ran with room for a 450-token reply. */
-        const val REPLY_TOKENS = 450
+        /** Room for the short answer and a few lines of code after it. */
+        const val REPLY_TOKENS = 800
         const val REQUEST_TIMEOUT_MILLIS = 60_000L
         /**
          * A question goes on right after the phrase it was answered on, while the other side is still asking: only
@@ -59,15 +61,21 @@ class QuestionsAssistant(
     private var epoch = 0L
     private var phrasesHeard = 0L
     private var silenceCheck: Job? = null
+    /** Set by [answerNow]: the next request asks for an answer, and is taken by it. */
+    private var answerNowWanted = false
     /** The row on the Questions screen that shows the last entry of [answered]: an "update" reply rewrites it. */
     private var lastRow: Int? = null
     /** When the newest phrase was heard, and when the newest phrase the last answer was given on was heard. */
     private var lastHeardAt = 0L
     private var lastAnsweredAt = 0L
 
-    /** [turn] has its text now; [currentSummary] is the conversation summary as it stands. */
+    /**
+     * [turn] has its text now; [currentSummary] is the conversation summary as it stands. Phrases are kept even with
+     * the mode off, for [answerNow]; only with it on is each one checked for a question.
+     */
     fun phraseHeard(turn: ConversationTurn, currentSummary: String) {
-        if (!preferences.getAppInfo().questions.enabled || turn.source.isBlank()) return
+        if (turn.source.isBlank()) return
+        val checked = preferences.getAppInfo().questions.enabled
         val send = synchronized(lock) {
             // A phrase already checked that a voice model then heard again: its text is updated in place.
             if (heard.any { it === turn }) return
@@ -76,8 +84,32 @@ class QuestionsAssistant(
             summary = currentSummary
             phrasesHeard += 1
             lastHeardAt = System.nanoTime() / 1_000_000
+            if (!checked) return
             silenceCheck?.cancel()
             silenceCheck = null
+            if (inFlight) {
+                pending = true
+                false
+            } else {
+                inFlight = true
+                true
+            }
+        }
+        if (send) launchRequest(afterSilence = false)
+    }
+
+    /**
+     * The user says a question went by unanswered: the latest phrases are sent asking for an answer to the latest
+     * question in them not answered yet, whatever the model made of them before. While a request is out, it goes
+     * right after it.
+     */
+    fun answerNow() {
+        val send = synchronized(lock) {
+            if (heard.none { it.source.isNotEmpty() }) {
+                log.info("Questions: nothing heard yet to answer")
+                return
+            }
+            answerNowWanted = true
             if (inFlight) {
                 pending = true
                 false
@@ -98,6 +130,7 @@ class QuestionsAssistant(
             summary = ""
             epoch += 1
             pending = false
+            answerNowWanted = false
             silenceCheck?.cancel()
             silenceCheck = null
         }
@@ -152,6 +185,8 @@ class QuestionsAssistant(
 
     /** One request; returns the reply's status, or null when none was sent. */
     private suspend fun ask(afterSilence: Boolean, mine: Long): String? {
+        // Taken first: a request that goes no further must not leave the mark for the next ordinary phrase.
+        val answerNow = synchronized(lock) { answerNowWanted.also { answerNowWanted = false } }
         val appInfo = preferences.getAppInfo()
         val settings = appInfo.questions
         val model = resolveLlmModel(settings.modelId)?.takeIf { it.readsText }
@@ -176,7 +211,14 @@ class QuestionsAssistant(
             )
         }
         if (speech.isEmpty()) return null
-        val prompt = QuestionPrompts.request(settings, summaryNow, history, speech, afterSilence, replaceable)
+        // Asked for by hand, the answer gets a row of its own.
+        if (answerNow) replaceable = false
+        val userHeard = when (appInfo.audioInput) {
+            AudioInput.MICROPHONE -> true
+            AudioInput.CALL -> appInfo.hearBothSides
+            AudioInput.MEDIA -> false
+        }
+        val prompt = QuestionPrompts.request(settings, summaryNow, history, speech, afterSilence, replaceable, answerNow, userHeard)
         val limiter = rateLimiters.forModel(model)
         while (true) {
             val wait = limiter.tryReserve((prompt.system.length + prompt.user.length) / 4 + REPLY_TOKENS)
@@ -242,6 +284,7 @@ class QuestionsAssistant(
             remember(QuestionPrompts.Answered(question, answer), current, replaced != null, newestAt, mine)
         ) {
             display.update(current, question, answer)
+            display.settled(current)
         } else {
             restore(current, replaced, mine)
         }
@@ -273,18 +316,13 @@ class QuestionsAssistant(
     }
 
     /**
-     * The chosen model's settings from the LLM page, except that questions run at temperature 0 with room for a
-     * 450-token reply unless the page sets them: that is how the design was tested.
+     * The chosen model's settings from the LLM page, except that questions run at temperature 0 with room for
+     * [REPLY_TOKENS] unless the page sets them: the design was tested at temperature 0.
      */
     private fun stream(model: LlmModel, key: String, prompt: ModelPrompt, chosen: ModelParameters?): Flow<String> {
         val own = (chosen ?: ModelParameters()).let {
             it.copy(temperature = it.temperature ?: 0.0, maxOutputTokens = it.maxOutputTokens ?: REPLY_TOKENS)
         }
-        val parameters = effectiveParameters(model.parameterSupport, own)
-        return when (model.engine) {
-            LlmModelEngine.GOOGLE -> cloud.streamGoogleAI(model.id, key, prompt, parameters)
-            LlmModelEngine.OPENAI -> cloud.streamOpenAI(model.id, key, prompt, parameters)
-            LlmModelEngine.CLAUDE -> cloud.streamClaude(model.id, key, prompt, parameters)
-        }
+        return cloud.streamText(model, key, prompt, effectiveParameters(model.parameterSupport, own))
     }
 }

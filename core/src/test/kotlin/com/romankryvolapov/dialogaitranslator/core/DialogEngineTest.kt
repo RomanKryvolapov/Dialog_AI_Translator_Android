@@ -161,7 +161,7 @@ class DialogEngineTest {
 
     @Test
     fun `without a key the dialog does not start and says why`() = runBlocking {
-        val s = Setup(Cloud(), ApplicationInfo())
+        val s = Setup(Cloud(), ApplicationInfo(methodKeys = listOf("gemini-live:gemini-3.5-flash-lite")))
         s.engine.start(s.source)
         val status = withTimeout(2_000) { s.engine.status.first { it.isNotEmpty() } }
         assertTrue("no Google API key" in status, status)

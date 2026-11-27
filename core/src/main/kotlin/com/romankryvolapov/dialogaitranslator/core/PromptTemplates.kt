@@ -16,6 +16,12 @@ object PromptVariables {
     const val SPEECH = "speech"
     const val QUESTION_LANGUAGE = "question_language"
     const val ANSWER_LANGUAGE = "answer_language"
+    const val ABOUT_USER = "about_user"
+    const val TOPIC = "topic"
+    const val QUESTION = "question"
+    const val ANSWER = "answer"
+    const val FOLLOW_UP = "follow_up"
+    const val HEARD = "heard"
 }
 
 /** One editable part of a prompt: which placeholders it may use and which it cannot do without. */
@@ -31,9 +37,26 @@ enum class PromptPart(val allowed: Set<String>, val required: Set<String> = empt
     ),
     PREVIOUS_PHRASE(setOf(PromptVariables.SAID, PromptVariables.TRANSLATED), required = setOf(PromptVariables.SAID)),
     QUESTIONS_MESSAGE(
-        setOf(PromptVariables.SUMMARY, PromptVariables.ANSWERED, PromptVariables.SPEECH),
+        setOf(
+            PromptVariables.ABOUT_USER, PromptVariables.TOPIC, PromptVariables.SUMMARY, PromptVariables.ANSWERED,
+            PromptVariables.HEARD, PromptVariables.SPEECH,
+        ),
         required = setOf(PromptVariables.SPEECH),
     ),
+    FOLLOW_UPS_MESSAGE(
+        setOf(PromptVariables.ABOUT_USER, PromptVariables.TOPIC, PromptVariables.SUMMARY, PromptVariables.QUESTION, PromptVariables.ANSWER),
+        required = setOf(PromptVariables.QUESTION, PromptVariables.ANSWER),
+    ),
+    EXPANSION_MESSAGE(
+        setOf(
+            PromptVariables.ABOUT_USER, PromptVariables.TOPIC, PromptVariables.SUMMARY, PromptVariables.QUESTION,
+            PromptVariables.ANSWER, PromptVariables.FOLLOW_UP,
+        ),
+        required = setOf(PromptVariables.QUESTION, PromptVariables.FOLLOW_UP),
+    ),
+
+    /** The follow-up and fuller-answer instructions: written in the answer language, which is a setting of its own. */
+    ANSWER_LANGUAGE_INSTRUCTIONS(setOf(PromptVariables.ANSWER_LANGUAGE), required = setOf(PromptVariables.ANSWER_LANGUAGE)),
 
     /** The questions instructions: the two display languages are settings of their own, so they come in by placeholder. */
     QUESTIONS_INSTRUCTIONS(

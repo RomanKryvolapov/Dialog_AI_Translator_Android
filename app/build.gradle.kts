@@ -43,3 +43,39 @@ dependencies {
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
 }
+
+// Like the PC app, which reads the `.env` in its folder: with every `installDebug` the keys in the project's `.env`,
+// and the user's own texts in `personal/` (facts about the user, the topic of the calls, any Questions prompt), go to
+// the phone. They land in the app's private folder; the app takes them into its encrypted settings at its next start
+// and deletes them. Only a debug build lets `run-as` write there, and the APK itself carries none of it.
+val envFile = rootProject.file(".env")
+val personalDir = rootProject.file("personal")
+val adb = androidComponents.sdkComponents.adb
+val packageName = android.defaultConfig.applicationId
+tasks.matching { it.name == "installDebug" }.configureEach {
+    doLast {
+        val sent = buildList {
+            if (envFile.isFile) add(envFile to "files/import.env")
+            personalDir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") }?.sortedBy { it.name }
+                ?.forEach { add(it to "files/import-personal/${it.name}") }
+        }
+        if (sent.isEmpty()) return@doLast logger.lifecycle("No .env or personal/ in the project folder, nothing sent to the phone")
+        val adbPath = adb.get().asFile.absolutePath
+        val serials = System.getenv("ANDROID_SERIAL")?.let(::listOf)
+            ?: ProcessBuilder(adbPath, "devices").start().inputStream.bufferedReader().readLines()
+                .drop(1).map { it.split('\t') }.filter { it.getOrNull(1) == "device" }.map { it[0] }
+        for (serial in serials) {
+            for ((file, target) in sent) {
+                val push = ProcessBuilder(
+                    adbPath, "-s", serial, "shell",
+                    "run-as $packageName sh -c 'umask 077 && mkdir -p ${target.substringBeforeLast('/')} && cat > $target'",
+                ).redirectInput(file).redirectErrorStream(true).start()
+                val output = push.inputStream.bufferedReader().readText().trim()
+                if (push.waitFor() != 0 || output.isNotEmpty()) {
+                    throw GradleException("${file.name} did not reach $serial: $output")
+                }
+            }
+            logger.lifecycle("Sent to $serial: ${sent.joinToString { it.first.name }}; the app takes them in at its next start")
+        }
+    }
+}

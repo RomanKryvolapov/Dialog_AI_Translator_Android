@@ -29,6 +29,7 @@ data class ApplicationInfo(
     /** The language spoken in the conversation, as a BCP-47 tag. */
     val speechLanguage: String = "en-US",
     val phrases: PhraseSettings = PhraseSettings(),
+    val microphone: MicrophoneSettings = MicrophoneSettings(),
     val useStreamingResponse: Boolean = true,
     val questions: QuestionsSettings = QuestionsSettings(),
     /** Off: phrases are still heard and shown (and checked for questions), but none is sent for translation. */
@@ -51,7 +52,24 @@ data class ApplicationInfo(
         "ApplicationInfo($methodKeys, $audioInput, keys of ${googleCloudToken.length}/${openAiToken.length}/${claudeToken.length})"
 
     companion object {
-        val DEFAULT_METHODS = listOf("gemini-live:gemini-3.5-flash-lite")
+        val DEFAULT_METHODS = listOf("system:gpt-6.1-terra")
+    }
+}
+
+/**
+ * How the microphone is heard, when it is the source. The three effects are the phone's own and are used only where the
+ * phone has them; the gain is the app's.
+ */
+@Serializable
+data class MicrophoneSettings(
+    val noiseSuppression: Boolean = false,
+    val automaticGain: Boolean = false,
+    val echoCancellation: Boolean = false,
+    /** Every sample is multiplied by this, in percent; 100 leaves the sound as it is. */
+    val gainPercent: Int = 100,
+) {
+    companion object {
+        val GAIN_PERCENTS = 25..400
     }
 }
 

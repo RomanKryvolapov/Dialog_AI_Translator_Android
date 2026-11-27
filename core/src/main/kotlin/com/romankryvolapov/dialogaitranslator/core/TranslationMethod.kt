@@ -45,10 +45,10 @@ sealed interface Hearing {
 val TranslationMethod.hearing: Hearing
     get() = recognizer?.let { Hearing.Recognition(it) } ?: Hearing.Voice(model)
 
-/** Every first-level choice: the models that hear audio, then the recognisers on offer. */
+/** Every first-level choice: the recognisers on offer, Android's first, then the models that hear audio. */
 fun allHearings(): List<Hearing> =
-    allLlmModels().filter { it.hearsAudio }.map { Hearing.Voice(it) } +
-        VoiceRecognitionEngine.entries.map { Hearing.Recognition(it) }
+    VoiceRecognitionEngine.entries.map { Hearing.Recognition(it) } +
+        allLlmModels().filter { it.hearsAudio }.map { Hearing.Voice(it) }
 
 /** The second level: models that translate a recogniser's text. */
 fun textModels(): List<LlmModel> = allLlmModels().filter { it.readsText }

@@ -17,6 +17,8 @@ import com.romankryvolapov.dialogaitranslator.core.ApplicationInfo
 import com.romankryvolapov.dialogaitranslator.core.AudioInput
 import com.romankryvolapov.dialogaitranslator.core.AudioSource
 import com.romankryvolapov.dialogaitranslator.core.FRAME_BYTES
+import com.romankryvolapov.dialogaitranslator.core.MicrophoneSettings
+import com.romankryvolapov.dialogaitranslator.core.amplify
 import com.romankryvolapov.dialogaitranslator.core.SAMPLE_RATE
 import org.slf4j.LoggerFactory
 import rikka.shizuku.Shizuku
@@ -25,13 +27,14 @@ import java.io.IOException
 import kotlin.concurrent.thread
 
 fun audioSourceFor(context: Context, info: ApplicationInfo): AudioSource = when (info.audioInput) {
-    AudioInput.MICROPHONE -> MicrophoneSource()
+    AudioInput.MICROPHONE -> MicrophoneSource(info.microphone)
     AudioInput.CALL -> PhoneSource(context, call = true, withMicrophone = info.hearBothSides)
     AudioInput.MEDIA -> PhoneSource(context, call = false, withMicrophone = false)
 }
 
-class MicrophoneSource : AudioSource {
+class MicrophoneSource(private val settings: MicrophoneSettings) : AudioSource {
 
+    private val log = LoggerFactory.getLogger("Microphone")
     @Volatile private var running = false
 
     @SuppressLint("MissingPermission") // asked for before a dialog starts
@@ -47,7 +50,10 @@ class MicrophoneSource : AudioSource {
                     )
                     .setBufferSizeInBytes(FRAME_BYTES * 10)
                     .build()
+                var effects = emptyList<MicrophoneEffects.Switched>()
                 try {
+                    effects = MicrophoneEffects.attach(record.audioSessionId, settings)
+                    log.info("Microphone effects: {}; gain {}%", effects.joinToString { "${it.name} ${if (it.on) "on" else "off"}" }.ifEmpty { "none on this phone" }, settings.gainPercent)
                     record.startRecording()
                     while (running) {
                         val frame = ByteArray(FRAME_BYTES)
@@ -57,9 +63,11 @@ class MicrophoneSource : AudioSource {
                             if (read <= 0) throw IOException("the microphone ended ($read)")
                             got += read
                         }
+                        amplify(frame, settings.gainPercent)
                         if (running) onFrame(frame)
                     }
                 } finally {
+                    effects.forEach { it.effect.release() }
                     record.release()
                 }
             } catch (e: Exception) {

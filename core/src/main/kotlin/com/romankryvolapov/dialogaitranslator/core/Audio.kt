@@ -31,9 +31,22 @@ interface SpeechRecognizer {
     interface Listener {
         /** The phrase being said, as far as it is heard; replaces the previous partial. */
         fun onPartial(text: String)
-        /** The phrase as settled; blank when nothing was said after all. */
-        fun onFinal(text: String)
+        /**
+         * The phrase as settled; blank when nothing was said after all. [pauseBeforeMillis]: the silence between the
+         * previous phrase's last word and this one's first, where the recogniser can tell.
+         */
+        fun onFinal(text: String, pauseBeforeMillis: Long? = null)
         fun onFailure(reason: String)
+    }
+}
+
+/** [pcm] (16-bit little-endian) made [percent] as loud, in place; a sample that would overflow is held at the limit. */
+fun amplify(pcm: ByteArray, percent: Int) {
+    if (percent == 100) return
+    val samples = ByteBuffer.wrap(pcm).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+    for (i in 0 until samples.limit()) {
+        val louder = samples.get(i) * percent / 100
+        samples.put(i, louder.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort())
     }
 }
 

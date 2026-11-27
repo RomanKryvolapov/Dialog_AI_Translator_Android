@@ -15,6 +15,7 @@ import com.google.crypto.tink.aead.AeadConfig
 import com.google.crypto.tink.integration.android.AndroidKeysetManager
 import com.romankryvolapov.dialogaitranslator.core.ApplicationInfo
 import com.romankryvolapov.dialogaitranslator.core.EnvFile
+import com.romankryvolapov.dialogaitranslator.core.PersonalTexts
 import com.romankryvolapov.dialogaitranslator.core.PreferencesRepository
 import com.romankryvolapov.dialogaitranslator.core.backgroundThreadScope
 import kotlinx.coroutines.channels.Channel
@@ -63,6 +64,7 @@ class SettingsStore(context: Context) : PreferencesRepository {
             }
         }
         importLeftFile(File(context.filesDir, IMPORT_FILE))
+        importPersonal(File(context.filesDir, PERSONAL_DIR))
     }
 
     override fun update(change: (ApplicationInfo) -> ApplicationInfo) {
@@ -80,8 +82,22 @@ class SettingsStore(context: Context) : PreferencesRepository {
         log.info("Keys imported, lengths: Google {}, OpenAI {}, Claude {}", info.googleCloudToken.length, info.openAiToken.length, info.claudeToken.length)
     }
 
+    /** The user's own texts left over a cable ([PersonalTexts]): taken in once, and the folder deleted. */
+    private fun importPersonal(dir: File) {
+        val files = dir.listFiles()?.filter { it.isFile } ?: return
+        val texts = files.mapNotNull { file ->
+            runCatching { file.name to file.readText() }.onFailure { log.warn("{} could not be read: {}", file.name, it.message) }.getOrNull()
+        }.toMap()
+        val result = PersonalTexts.apply(texts, getAppInfo())
+        update { result.info }
+        if (!dir.deleteRecursively()) log.warn("The imported personal texts could not be deleted")
+        log.info("Personal texts taken in: {}", result.applied.ifEmpty { listOf("none") }.joinToString())
+        result.skipped.forEach { (name, why) -> log.warn("Personal text {} left out: {}", name, why) }
+    }
+
     private companion object {
         const val FILE = "settings.bin"
+        const val PERSONAL_DIR = "import-personal"
         const val KEYSET = "settings_keyset"
         const val IMPORT_FILE = "import.env"
 
